@@ -19,14 +19,14 @@
 
 import UIKit
 
-class INSPhotosInteractionAnimator: NSObject, UIViewControllerInteractiveTransitioning {
+public class INSPhotosInteractionAnimator: NSObject, UIViewControllerInteractiveTransitioning {
     var animator: UIViewControllerAnimatedTransitioning?
     var viewToHideWhenBeginningTransition: UIView?
     var shouldAnimateUsingAnimator: Bool = false
     
     private var transitionContext: UIViewControllerContextTransitioning?
     
-    func startInteractiveTransition(_ transitionContext: UIViewControllerContextTransitioning) {
+    public func startInteractiveTransition(_ transitionContext: UIViewControllerContextTransitioning) {
         viewToHideWhenBeginningTransition?.alpha = 0.0
         self.transitionContext = transitionContext
     }
@@ -60,7 +60,7 @@ class INSPhotosInteractionAnimator: NSObject, UIViewControllerInteractiveTransit
         let velocityY = gestureRecognizer.velocity(in: gestureRecognizer.view).y
         
         var animationDuration = (Double(abs(velocityY)) * returnToCenterVelocityAnimationRatio) + 0.2
-        var animationCurve: UIViewAnimationOptions = .curveEaseOut
+        var animationCurve: UIView.AnimationOptions = .curveEaseOut
         var finalPageViewCenterPoint = anchorPoint
         var finalBackgroundAlpha = 1.0
         

@@ -74,6 +74,11 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     }
 
     /*
+     * Whether or not we should confirm with the user before deleting a photo
+     */
+    open var shouldConfirmDeletion: Bool = false
+
+    /*
      * INSPhotoViewController is currently displayed by page view controller
      */
     open var currentPhotoViewController: INSPhotoViewController? {
@@ -88,16 +93,16 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     }
     
     // MARK: - Private
-    private(set) var pageViewController: UIPageViewController!
-    private(set) var dataSource: INSPhotosDataSource
+    public private(set) var pageViewController: UIPageViewController!
+    public private(set) var dataSource: INSPhotosDataSource
     
-    let interactiveAnimator: INSPhotosInteractionAnimator = INSPhotosInteractionAnimator()
-    let transitionAnimator: INSPhotosTransitionAnimator = INSPhotosTransitionAnimator()
+    public let interactiveAnimator: INSPhotosInteractionAnimator = INSPhotosInteractionAnimator()
+    public let transitionAnimator: INSPhotosTransitionAnimator = INSPhotosTransitionAnimator()
     
-    private(set) lazy var singleTapGestureRecognizer: UITapGestureRecognizer = {
+    public private(set) lazy var singleTapGestureRecognizer: UITapGestureRecognizer = {
         return UITapGestureRecognizer(target: self, action: #selector(INSPhotosViewController.handleSingleTapGestureRecognizer(_:)))
     }()
-    private(set) lazy var panGestureRecognizer: UIPanGestureRecognizer = {
+    public private(set) lazy var panGestureRecognizer: UIPanGestureRecognizer = {
         return UIPanGestureRecognizer(target: self, action: #selector(INSPhotosViewController.handlePanGestureRecognizer(_:)))
     }()
     
@@ -113,6 +118,10 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
             return previousPhoto
         }
         return nil
+    }
+    
+    private func orientationMaskSupportsOrientation(mask: UIInterfaceOrientationMask, orientation: UIInterfaceOrientation) -> Bool {
+        return (mask.rawValue & (1 << orientation.rawValue)) != 0
     }
     
     // MARK: - Initialization
@@ -167,7 +176,7 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
         if let overlayView = overlayView as? INSPhotosOverlayView {
             overlayView.photosViewController = self
             #if swift(>=4.0)
-                overlayView.titleTextAttributes = [NSAttributedStringKey.foregroundColor: textColor]
+            overlayView.titleTextAttributes = [NSAttributedString.Key.foregroundColor: textColor]
             #else
                 overlayView.titleTextAttributes = [NSForegroundColorAttributeName: textColor]
             #endif
@@ -185,10 +194,10 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
         pageViewController.view.addGestureRecognizer(panGestureRecognizer)
         pageViewController.view.addGestureRecognizer(singleTapGestureRecognizer)
         
-        addChildViewController(pageViewController)
+        addChild(pageViewController)
         view.addSubview(pageViewController.view)
         pageViewController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        pageViewController.didMove(toParentViewController: self)
+        pageViewController.didMove(toParent: self)
         
         setupOverlayView()
     }
@@ -214,7 +223,7 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     }
     
     private func setupPageViewControllerWithInitialPhoto(_ initialPhoto: INSPhotoViewable? = nil) {
-        pageViewController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [UIPageViewControllerOptionInterPageSpacingKey: 16.0])
+        pageViewController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [UIPageViewController.OptionsKey.interPageSpacing: 16.0])
         pageViewController.view.backgroundColor = UIColor.clear
         pageViewController.delegate = self
         pageViewController.dataSource = self
@@ -231,6 +240,37 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
             overlayView.populateWithPhoto(currentPhoto)
         }
     }
+
+    // MARK: - Helper methods
+
+    private func deleteCurrentPhoto() {
+        guard let currentPhoto = self.currentPhoto else {
+            return
+        }
+        guard let currentPhotoIndex = self.dataSource.indexOfPhoto(currentPhoto) else {
+            return
+        }
+        self.dataSource.deletePhoto(currentPhoto)
+        self.deletePhotoHandler?(currentPhoto)
+        if let photo = newCurrentPhotoAfterDeletion(currentPhotoIndex: currentPhotoIndex) {
+            if currentPhotoIndex == self.dataSource.numberOfPhotos {
+                self.changeToPhoto(photo, animated: true, direction: .reverse)
+            }else{
+                self.changeToPhoto(photo, animated: true)
+            }
+        }else{
+            self.dismiss(animated: true, completion: nil)
+        }
+    }
+
+    private func confirmPhotoDeletion(delete: @escaping () -> Void) {
+        let alertController = UIAlertController(title: nil, message: "Are you sure you want to delete this photo?", preferredStyle: .alert)
+        alertController.addAction(UIAlertAction(title: "Delete Photo", style: .destructive, handler: { (_) in
+            delete()
+        }))
+        alertController.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        present(alertController, animated: true)
+    }
     
     // MARK: - Public
     
@@ -240,7 +280,7 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
      - parameter photo:    The photo to make the currently displayed photo.
      - parameter animated: Whether to animate the transition to the new photo.
      */
-    open func changeToPhoto(_ photo: INSPhotoViewable, animated: Bool, direction: UIPageViewControllerNavigationDirection = .forward) {
+    open func changeToPhoto(_ photo: INSPhotoViewable, animated: Bool, direction: UIPageViewController.NavigationDirection = .forward) {
         if !dataSource.containsPhoto(photo) {
             return
         }
@@ -252,6 +292,14 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     // MARK: - Gesture Recognizers
     
     @objc private func handlePanGestureRecognizer(_ gestureRecognizer: UIPanGestureRecognizer) {
+        
+        // if current orientation is different from supported orientations of presenting vc, disable flick-to-dismiss
+        if let presentingViewController = presentingViewController {
+            if !orientationMaskSupportsOrientation(mask: presentingViewController.supportedInterfaceOrientations, orientation: UIApplication.shared.statusBarOrientation) {
+                return
+            }
+        }
+        
         if gestureRecognizer.state == .began {
             interactiveDismissal = true
             dismiss(animated: true, completion: nil)
@@ -268,20 +316,12 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     // MARK: - Target Actions
     
     open func handleDeleteButtonTapped(){
-        if let currentPhoto = self.currentPhoto {
-            if let currentPhotoIndex = self.dataSource.indexOfPhoto(currentPhoto) {
-                self.dataSource.deletePhoto(currentPhoto)
-                self.deletePhotoHandler?(currentPhoto)
-                if let photo = newCurrentPhotoAfterDeletion(currentPhotoIndex: currentPhotoIndex) {
-                    if currentPhotoIndex == self.dataSource.numberOfPhotos {
-                        self.changeToPhoto(photo, animated: true, direction: .reverse)
-                    }else{
-                        self.changeToPhoto(photo, animated: true)
-                    }
-                }else{
-                    self.dismiss(animated: true, completion: nil)
-                }
+        if shouldConfirmDeletion {
+            confirmPhotoDeletion { [weak self] in
+                self?.deleteCurrentPhoto()
             }
+        } else {
+            deleteCurrentPhoto()
         }
     }
     
@@ -323,7 +363,7 @@ open class INSPhotosViewController: UIViewController, UIPageViewControllerDataSo
     
     // MARK: - UIPageViewControllerDataSource / UIPageViewControllerDelegate
 
-    private func initializePhotoViewControllerForPhoto(_ photo: INSPhotoViewable) -> INSPhotoViewController {
+    public func initializePhotoViewControllerForPhoto(_ photo: INSPhotoViewable) -> INSPhotoViewController {
         let photoViewController = INSPhotoViewController(photo: photo)
         singleTapGestureRecognizer.require(toFail: photoViewController.doubleTapGestureRecognizer)
         photoViewController.longPressGestureHandler = { [weak self] gesture in

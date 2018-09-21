@@ -20,7 +20,7 @@
 import UIKit
 
 public protocol INSPhotosOverlayViewable:class {
-    weak var photosViewController: INSPhotosViewController? { get set }
+    var photosViewController: INSPhotosViewController? { get set }
     
     func populateWithPhoto(_ photo: INSPhotoViewable)
     func setHidden(_ hidden: Bool, animated: Bool)
@@ -45,32 +45,32 @@ open class INSPhotosOverlayView: UIView , INSPhotosOverlayViewable {
     private var topShadow: CAGradientLayer!
     private var bottomShadow: CAGradientLayer!
     
-    var leftBarButtonItem: UIBarButtonItem? {
+    open var leftBarButtonItem: UIBarButtonItem? {
         didSet {
             navigationItem.leftBarButtonItem = leftBarButtonItem
         }
     }
-    var rightBarButtonItem: UIBarButtonItem? {
+    open var rightBarButtonItem: UIBarButtonItem? {
         didSet {
             navigationItem.rightBarButtonItem = rightBarButtonItem
         }
     }
     
     #if swift(>=4.0)
-    var titleTextAttributes: [NSAttributedStringKey : AnyObject] = [:] {
+    open var titleTextAttributes: [NSAttributedString.Key : AnyObject] = [:] {
         didSet {
             navigationBar.titleTextAttributes = titleTextAttributes
         }
     }
     #else
-    var titleTextAttributes: [String : AnyObject] = [:] {
+    open var titleTextAttributes: [String : AnyObject] = [:] {
         didSet {
             navigationBar.titleTextAttributes = titleTextAttributes
         }
     }
     #endif
     
-    override init(frame: CGRect) {
+    public override init(frame: CGRect) {
         super.init(frame: frame)
         setupShadows()
         setupNavigationBar()
@@ -166,7 +166,12 @@ open class INSPhotosOverlayView: UIView , INSPhotosOverlayViewable {
         navigationBar.items = [navigationItem]
         addSubview(navigationBar)
         
-        let topConstraint = NSLayoutConstraint(item: navigationBar, attribute: .top, relatedBy: .equal, toItem: self, attribute: .top, multiplier: 1.0, constant: 0.0)
+        let topConstraint: NSLayoutConstraint
+        if #available(iOS 11.0, *) {
+            topConstraint = NSLayoutConstraint(item: navigationBar, attribute: .top, relatedBy: .equal, toItem: self.safeAreaLayoutGuide, attribute: .top, multiplier: 1.0, constant: 0.0)
+        } else {
+            topConstraint = NSLayoutConstraint(item: navigationBar, attribute: .top, relatedBy: .equal, toItem: self, attribute: .top, multiplier: 1.0, constant: 0.0)
+        }
         let widthConstraint = NSLayoutConstraint(item: navigationBar, attribute: .width, relatedBy: .equal, toItem: self, attribute: .width, multiplier: 1.0, constant: 0.0)
         let horizontalPositionConstraint = NSLayoutConstraint(item: navigationBar, attribute: .centerX, relatedBy: .equal, toItem: self, attribute: .centerX, multiplier: 1.0, constant: 0.0)
         self.addConstraints([topConstraint,widthConstraint,horizontalPositionConstraint])
